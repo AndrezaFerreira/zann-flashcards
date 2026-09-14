@@ -3548,7 +3548,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-vb928ded5c1";
+    "zwords-static-vf2634284c1";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
@@ -4819,167 +4819,143 @@ async function initializeOfflineTest() {
 
                 // ====================================================
                 // PACKAGES
+                //
+                // Each package still gets its own internal retry (see
+                // downloadOfflinePackage). On top of that, a package that
+                // keeps failing does NOT stop the whole run anymore -- it
+                // is set aside and the loop moves on to the next package,
+                // so one bad/blocked package never blocks the other ~440.
+                // Left-over packages are retried automatically in extra
+                // rounds (with a pause between rounds) before finally
+                // giving up and asking the user to tap again.
                 // ====================================================
 
-                for (
-                    let i = 0;
-                    i < packages.length;
-                    i++
-                ) {
+                async function downloadAndInstallPackage(pkg, index) {
 
-                    const pkg =
-                        packages[
-                            i
-                        ];
-
-
-                    if (
-                        completed.has(
-                            pkg.id
-                        )
-                    ) {
-
-                        continue;
-
-                    }
-
-
-                    let currentBytes =
-                        0;
-
+                    let currentBytes = 0;
 
                     status.textContent =
-                        `Package ${
-                            i + 1
-                        } / ${
-                            packages.length
-                        }: ${pkg.id}`;
-
+                        `Package ${index + 1} / ${packages.length}: ${pkg.id}`;
 
                     const zipBlob =
                         await downloadOfflinePackage(
                             pkg,
                             received => {
 
-                                currentBytes =
-                                    received;
-
+                                currentBytes = received;
 
                                 const overallBytes =
-                                    completedBytes
-                                    +
-                                    currentBytes;
-
+                                    completedBytes + currentBytes;
 
                                 const percent =
                                     totalBytes
-                                        ? (
-                                            overallBytes
-                                            /
-                                            totalBytes
-                                        )
-                                            *
-                                            100
+                                        ? (overallBytes / totalBytes) * 100
                                         : 0;
 
-
                                 progressBar.style.width =
-                                    `${
-                                        Math.min(
-                                            100,
-                                            percent
-                                        ).toFixed(
-                                            2
-                                        )
-                                    }%`;
-
+                                    `${Math.min(100, percent).toFixed(2)}%`;
 
                                 status.textContent =
-                                    `${
-                                        percent.toFixed(
-                                            2
-                                        )
-                                    }% • ${
-                                        formatOfflineBytes(
-                                            overallBytes
-                                        )
-                                    } / ${
-                                        formatOfflineBytes(
-                                            totalBytes
-                                        )
-                                    } • ${pkg.id}`;
+                                    `${percent.toFixed(2)}% • ` +
+                                    `${formatOfflineBytes(overallBytes)} / ` +
+                                    `${formatOfflineBytes(totalBytes)} • ${pkg.id}`;
 
                             }
                         );
 
-
-                    // ====================================================
                     // INSTALL PACKAGE CONTENT
-                    // ====================================================
 
                     const installedFiles =
-                        await installOfflinePackage(
-                            zipBlob,
-                            pkg,
-                            status
-                        );
+                        await installOfflinePackage(zipBlob, pkg, status);
 
-
-                    // ====================================================
                     // PACKAGE COMPLETE
-                    // ====================================================
 
-                    completed.add(
-                        pkg.id
-                    );
+                    completed.add(pkg.id);
 
-
-                    saveOfflineCompletedPackages(
-                        completed
-                    );
-
+                    saveOfflineCompletedPackages(completed);
 
                     completedBytes +=
-                        Number(
-                            pkg.sizeBytes
-                            ||
-                            zipBlob.size
-                        );
+                        Number(pkg.sizeBytes || zipBlob.size);
 
-
-                    completedFiles +=
-                        installedFiles;
-
+                    completedFiles += installedFiles;
 
                     const completedPercent =
                         totalBytes
-                            ? (
-                                completedBytes
-                                /
-                                totalBytes
-                            )
-                                *
-                                100
+                            ? (completedBytes / totalBytes) * 100
                             : 100;
 
-
                     progressBar.style.width =
-                        `${
-                            Math.min(
-                                100,
-                                completedPercent
-                            ).toFixed(
-                                2
-                            )
-                        }%`;
-
+                        `${Math.min(100, completedPercent).toFixed(2)}%`;
 
                     status.textContent =
-                        `${
-                            completed.size
-                        } / ${
-                            packages.length
-                        } packages installed`;
+                        `${completed.size} / ${packages.length} packages installed`;
+
+                }
+
+
+                let pendingPackages =
+                    packages
+                        .map((pkg, index) => ({ pkg, index }))
+                        .filter(({ pkg }) => !completed.has(pkg.id));
+
+                const MAX_AUTO_RETRY_ROUNDS = 6;
+
+                const RETRY_ROUND_DELAY_MS = 15000;
+
+                for (
+                    let round = 1;
+                    round <= MAX_AUTO_RETRY_ROUNDS && pendingPackages.length;
+                    round++
+                ) {
+
+                    const stillFailing = [];
+
+                    for (const { pkg, index } of pendingPackages) {
+
+                        try {
+
+                            await downloadAndInstallPackage(pkg, index);
+
+                        } catch (error) {
+
+                            console.warn(
+                                `Package ${pkg.id} failed on round ${round}:`,
+                                error
+                            );
+
+                            stillFailing.push({ pkg, index });
+
+                        }
+
+                    }
+
+                    pendingPackages = stillFailing;
+
+                    if (
+                        pendingPackages.length
+                        &&
+                        round < MAX_AUTO_RETRY_ROUNDS
+                    ) {
+
+                        status.textContent =
+                            `${pendingPackages.length} package(s) failed, ` +
+                            `retrying automatically in ` +
+                            `${RETRY_ROUND_DELAY_MS / 1000}s...`;
+
+                        await new Promise(
+                            resolve => setTimeout(resolve, RETRY_ROUND_DELAY_MS)
+                        );
+
+                    }
+
+                }
+
+                if (pendingPackages.length) {
+
+                    throw new Error(
+                        `${pendingPackages.length} package(s) still failing ` +
+                        `after ${MAX_AUTO_RETRY_ROUNDS} automatic retry rounds.`
+                    );
 
                 }
 
