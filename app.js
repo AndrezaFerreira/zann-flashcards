@@ -46,6 +46,16 @@ const PROGRESS_STORAGE_KEY =
 
 let studyProgress = {};
 
+// In-memory mirror of the shared per-word status store
+// (zwords_shared_db, see shared/word-status.js), keyed by
+// ZWordsSharedStatus.normalizeSharedWord(word). This is what ZWords and
+// ZBooks both read/write, so a word marked here shows the same status
+// there and vice versa. Populated by initSharedWordStatus() at startup.
+let sharedWordStatusMap = {};
+
+const MIGRATION_DONE_KEY =
+    "zwords_shared_migration_v1_done";
+
 
 // ============================================================
 // ELEMENTS
@@ -763,22 +773,33 @@ function getCardProgressKey(
 }
 
 
+// getCardStatus/setCardStatus are now backed by the SHARED per-word
+// status store (zwords_shared_db, see shared/word-status.js) instead of
+// the old per-sense_id studyProgress/localStorage. This is what lets a
+// word marked in ZBooks show up with the same status in ZWords and vice
+// versa. getCardProgressKey/studyProgress/loadStudyProgress/
+// saveStudyProgress are kept below untouched -- they are only read once,
+// by migrateOldProgressToSharedStatus(), to carry old progress forward.
+
 function getCardStatus(
     deck,
     card
 ) {
 
-    const progressKey =
-        getCardProgressKey(
-            deck,
-            card
+    const key =
+        ZWordsSharedStatus.normalizeSharedWord(
+            card.word ||
+            ""
         );
 
+    const record =
+        sharedWordStatusMap[
+            key
+        ];
 
     const status =
-        studyProgress[
-            progressKey
-        ];
+        record &&
+        record.explicitStatus;
 
 
     if (
@@ -821,11 +842,28 @@ function setCardStatus(
     }
 
 
-    const progressKey =
-        getCardProgressKey(
-            deck,
-            card
+    const key =
+        ZWordsSharedStatus.normalizeSharedWord(
+            card.word ||
+            ""
         );
+
+    if (
+        !key
+    ) {
+
+        return;
+
+    }
+
+
+    const record =
+        sharedWordStatusMap[
+            key
+        ] ||
+        {
+            word: key
+        };
 
 
     if (
@@ -833,21 +871,112 @@ function setCardStatus(
         "new"
     ) {
 
-        delete studyProgress[
-            progressKey
-        ];
+        delete record.explicitStatus;
 
     } else {
 
-        studyProgress[
-            progressKey
-        ] =
+        record.explicitStatus =
             status;
 
     }
 
 
-    saveStudyProgress();
+    record.updatedAt =
+        new Date()
+            .toISOString();
+
+    record.updatedFrom =
+        "zwords";
+
+
+    sharedWordStatusMap[
+        key
+    ] =
+        record;
+
+
+    ZWordsSharedStatus
+        .putWordStatusRecord(
+            record
+        )
+        .catch(
+            error => {
+
+                console.error(
+                    "Could not save shared word status:",
+                    error
+                );
+
+            }
+        );
+
+}
+
+
+// Called when a word is actively looked up (search result tapped), not
+// on passive flashcard navigation -- otherwise plain review would count
+// as "consulted" and inflate the amarelo-suave (seen) status. Shared
+// with ZBooks: any lookup, in either app, counts toward the same record.
+function recordWordLookup(
+    word
+) {
+
+    const key =
+        ZWordsSharedStatus.normalizeSharedWord(
+            word ||
+            ""
+        );
+
+    if (
+        !key
+    ) {
+
+        return;
+
+    }
+
+
+    const record =
+        sharedWordStatusMap[
+            key
+        ] ||
+        {
+            word: key
+        };
+
+
+    record.lookupCount =
+        (
+            record.lookupCount ||
+            0
+        ) +
+        1;
+
+    record.lastLookupAt =
+        new Date()
+            .toISOString();
+
+
+    sharedWordStatusMap[
+        key
+    ] =
+        record;
+
+
+    ZWordsSharedStatus
+        .putWordStatusRecord(
+            record
+        )
+        .catch(
+            error => {
+
+                console.error(
+                    "Could not save word lookup:",
+                    error
+                );
+
+            }
+        );
 
 }
 
@@ -871,11 +1000,289 @@ function getStudyModeCards(
 
 
 // ============================================================
-// INITIALIZE STUDY PROGRESS
+// MIGRATE OLD (per-sense) PROGRESS INTO SHARED (per-word) STATUS
+//
+// Runs once, ever (gated by MIGRATION_DONE_KEY). Old studyProgress
+// entries are per sense_id; the shared store is per word, so this
+// collapses all senses of a word into one record. If senses disagree
+// (e.g. one sense "known", another "learning"), "known" wins. The old
+// localStorage data is left untouched as a backup -- it just stops
+// being read after this point.
 // ============================================================
 
-studyProgress =
-    loadStudyProgress();
+async function migrateOldProgressToSharedStatus() {
+
+    if (
+        localStorage.getItem(
+            MIGRATION_DONE_KEY
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const oldEntries =
+        Object.entries(
+            studyProgress
+        );
+
+
+    if (
+        oldEntries.length ===
+        0
+    ) {
+
+        localStorage.setItem(
+            MIGRATION_DONE_KEY,
+            "1"
+        );
+
+        return;
+
+    }
+
+
+    const wordByStatus = {};
+
+
+    for (
+        const deck of Object.keys(
+            deckFiles
+        )
+    ) {
+
+        let deckCards;
+
+        try {
+
+            deckCards =
+                await loadDeck(
+                    deck
+                );
+
+        } catch (
+            error
+        ) {
+
+            console.error(
+                "Could not load deck for migration:",
+                deck,
+                error
+            );
+
+            continue;
+
+        }
+
+
+        for (
+            const card of deckCards
+        ) {
+
+            if (
+                !card.word
+            ) {
+
+                continue;
+
+            }
+
+
+            const progressKey =
+                getCardProgressKey(
+                    deck,
+                    card
+                );
+
+            const oldStatus =
+                studyProgress[
+                    progressKey
+                ];
+
+
+            if (
+                oldStatus !==
+                "learning"
+                &&
+                oldStatus !==
+                "known"
+            ) {
+
+                continue;
+
+            }
+
+
+            const key =
+                ZWordsSharedStatus.normalizeSharedWord(
+                    card.word
+                );
+
+            if (
+                !key
+            ) {
+
+                continue;
+
+            }
+
+
+            const existingStatus =
+                wordByStatus[
+                    key
+                ];
+
+
+            if (
+                existingStatus ===
+                "known"
+            ) {
+
+                continue;
+
+            }
+
+
+            wordByStatus[
+                key
+            ] =
+                oldStatus;
+
+        }
+
+    }
+
+
+    const migratedAt =
+        new Date()
+            .toISOString();
+
+
+    for (
+        const [
+            key,
+            status
+        ] of Object.entries(
+            wordByStatus
+        )
+    ) {
+
+        const record =
+            sharedWordStatusMap[
+                key
+            ] ||
+            {
+                word: key
+            };
+
+
+        if (
+            record.explicitStatus ===
+            "known"
+        ) {
+
+            continue;
+
+        }
+
+
+        record.explicitStatus =
+            status;
+
+        record.updatedAt =
+            migratedAt;
+
+        record.updatedFrom =
+            "zwords-migration";
+
+
+        sharedWordStatusMap[
+            key
+        ] =
+            record;
+
+
+        try {
+
+            await ZWordsSharedStatus.putWordStatusRecord(
+                record
+            );
+
+        } catch (
+            error
+        ) {
+
+            console.error(
+                "Could not save migrated word status:",
+                key,
+                error
+            );
+
+        }
+
+    }
+
+
+    localStorage.setItem(
+        MIGRATION_DONE_KEY,
+        "1"
+    );
+
+}
+
+
+// ============================================================
+// INITIALIZE SHARED WORD STATUS
+// ============================================================
+
+async function initSharedWordStatus() {
+
+    studyProgress =
+        loadStudyProgress();
+
+
+    try {
+
+        const records =
+            await ZWordsSharedStatus.loadAllWordStatus();
+
+
+        sharedWordStatusMap = {};
+
+
+        for (
+            const record of records
+        ) {
+
+            sharedWordStatusMap[
+                record.word
+            ] =
+                record;
+
+        }
+
+
+        await migrateOldProgressToSharedStatus();
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "Could not load shared word status:",
+            error
+        );
+
+    }
+
+}
+
+
+const sharedWordStatusReady =
+    initSharedWordStatus();
 
 
 // ============================================================
@@ -887,6 +1294,9 @@ async function openStudyMenu(
 ) {
 
     try {
+
+        await sharedWordStatusReady;
+
 
         currentDeck =
             deck;
@@ -1203,6 +1613,9 @@ async function openDeck(
 ) {
 
     try {
+
+        await sharedWordStatusReady;
+
 
         currentDeck =
             deck;
@@ -3474,6 +3887,11 @@ function renderSearchResults(
                                 ].item;
 
 
+                            recordWordLookup(
+                                item.word
+                            );
+
+
                             openDeck(
                                 item.deck,
                                 {
@@ -3636,7 +4054,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-v519b2038be";
+    "zwords-static-v9105e447ac";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
@@ -3659,6 +4077,7 @@ const OFFLINE_CORE_FILES = [
     "./manifest.json",
     "./offline-manifest.json",
     "./libs/fflate.min.js",
+    "./shared/word-status.js",
 
     "./data/02_cards_words.json",
     "./data/03_cards_phrases.json",
