@@ -1,12 +1,12 @@
 // ============================================================
-// ZANN FLASHCARDS SERVICE WORKER
+// ZWORDS SERVICE WORKER
 // ============================================================
 
 const STATIC_CACHE =
-    "zann-static-va4036c3a2d";
+    "zwords-static-vb928ded5c1";
 
 const MEDIA_CACHE =
-    "zann-media-v1";
+    "zwords-media-v1";
 
 
 // ============================================================
@@ -52,7 +52,7 @@ self.addEventListener(
 
                             if (
                                 cacheName.startsWith(
-                                    "zann-"
+                                    "zwords-"
                                 )
                                 &&
                                 !validCaches.includes(
@@ -438,7 +438,7 @@ async function navigationRequest(
 
 
         return new Response(
-            "Zann Flashcards is unavailable offline.",
+            "ZWords is unavailable offline.",
             {
                 status:
                     503,

@@ -1,6 +1,6 @@
 {
-    "name": "Zann Flashcards",
-    "short_name": "Zann",
+    "name": "ZWords",
+    "short_name": "ZWords",
     "description": "Offline English flashcards for words, phrases and irregular verbs.",
     "start_url": "./",
     "scope": "./",

@@ -38,7 +38,7 @@ let searchTimer = null;
 // ============================================================
 
 const PROGRESS_STORAGE_KEY =
-    "zann_flashcards_progress_v1";
+    "zwords_progress_v1";
 
 let studyProgress = {};
 
@@ -99,7 +99,7 @@ const deckFiles = {
 // ============================================================
 
 const DB_NAME =
-    "zann_flashcards_db";
+    "zwords_db";
 
 const DB_VERSION =
     1;
@@ -3545,16 +3545,16 @@ function hideSearch() {
 // ============================================================
 
 const OFFLINE_MEDIA_CACHE =
-    "zann-media-v1";
+    "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zann-static-va4036c3a2d";
+    "zwords-static-vb928ded5c1";
 
 const OFFLINE_PROGRESS_KEY =
-    "zann_offline_packages_v1";
+    "zwords_offline_packages_v1";
 
 const OFFLINE_COMPLETE_MARKER =
-    "./__zann_offline_complete_v1__";
+    "./__zwords_offline_complete_v1__";
 
 let offlineDownloadRunning =
     false;
@@ -4620,7 +4620,7 @@ async function initializeOfflineTest() {
                 // ====================================================
 
                 status.textContent =
-                    "Preparing Zann for offline use...";
+                    "Preparing ZWords for offline use...";
 
 
                 await installOfflineCore(
