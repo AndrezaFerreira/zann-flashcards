@@ -8,6 +8,11 @@ const STATIC_CACHE =
 const MEDIA_CACHE =
     "zwords-media-v1";
 
+// Must match MEDIA_BASE_URL in app.js exactly -- images/audio are
+// hosted on R2 (cross-origin), not this same origin.
+const MEDIA_BASE_URL =
+    "https://pub-278133aaa2ee4e8c96dc7c89f8a6ef6e.r2.dev/";
+
 
 // ============================================================
 // INSTALL
@@ -106,45 +111,22 @@ self.addEventListener(
             );
 
 
-        if (
-            requestURL.origin
-            !==
-            self.location.origin
-        ) {
-            return;
-        }
-
-
-        const pathname =
-            requestURL.pathname;
-
-
         // ====================================================
-        // ZIP PACKAGES
-        // Never cache ZIP packages themselves
+        // R2-HOSTED MEDIA (IMAGES + AUDIO)
+        // Cache first. Checked before the same-origin bailout
+        // below because R2 is a different origin from this app.
+        // Zip packages live under the same R2 bucket but are
+        // never cached here -- only unzipped/cached via the
+        // bulk offline-install flow in app.js.
         // ====================================================
 
         if (
-            pathname.includes(
+            requestURL.href.startsWith(
+                MEDIA_BASE_URL
+            )
+            &&
+            !requestURL.pathname.includes(
                 "/packages/"
-            )
-        ) {
-            return;
-        }
-
-
-        // ====================================================
-        // IMAGES + AUDIO
-        // Cache first
-        // ====================================================
-
-        if (
-            pathname.includes(
-                "/images/"
-            )
-            ||
-            pathname.includes(
-                "/audio/"
             )
         ) {
 
@@ -156,6 +138,19 @@ self.addEventListener(
 
             return;
         }
+
+
+        if (
+            requestURL.origin
+            !==
+            self.location.origin
+        ) {
+            return;
+        }
+
+
+        const pathname =
+            requestURL.pathname;
 
 
         // ====================================================

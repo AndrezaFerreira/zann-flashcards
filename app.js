@@ -79,6 +79,20 @@ const irregularsButton =
 
 
 // ============================================================
+// MEDIA HOST (Cloudflare R2)
+//
+// Images and audio are served from R2 instead of this same origin
+// (they don't fit GitHub Pages' 1GB limit). This must match exactly
+// what installOfflinePackage() uses to build cache keys, and what
+// service-worker.js's MEDIA_BASE_URL points at, or offline-installed
+// media and on-demand media end up under different cache keys.
+// ============================================================
+
+const MEDIA_BASE_URL =
+    "https://pub-278133aaa2ee4e8c96dc7c89f8a6ef6e.r2.dev/";
+
+
+// ============================================================
 // DECK FILES
 // ============================================================
 
@@ -1557,7 +1571,7 @@ function getAudioPath(
     }
 
 
-    return `audio/${
+    return `${MEDIA_BASE_URL}audio/${
         audioFile.replace(
             "audio_all/",
             ""
@@ -1659,7 +1673,7 @@ function getIrregularFormAudioPath(
     }
 
 
-    return `audio/${audioFile}`;
+    return `${MEDIA_BASE_URL}audio/${audioFile}`;
 
 }
 
@@ -1795,7 +1809,7 @@ function getDefinitionAudioPath(
     }
 
 
-    return `audio/${audioFile}`;
+    return `${MEDIA_BASE_URL}audio/${audioFile}`;
 
 }
 
@@ -1834,7 +1848,7 @@ function getExampleAudioPath(
     }
 
 
-    return `audio/${audioFile}`;
+    return `${MEDIA_BASE_URL}audio/${audioFile}`;
 
 }
 
@@ -1868,10 +1882,12 @@ function showCard({
 
     const imagePath =
         card.image
-            ? card.image.replace(
-                "images_all/",
-                "images/"
-            )
+            ? `${MEDIA_BASE_URL}${
+                card.image.replace(
+                    "images_all/",
+                    "images/"
+                )
+            }`
             : null;
 
 
@@ -4364,7 +4380,7 @@ async function installOfflinePackage(
         const fileUrl =
             new URL(
                 cleanFilename,
-                window.location.href
+                MEDIA_BASE_URL
             ).href;
 
 
