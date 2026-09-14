@@ -22,6 +22,10 @@ let currentSide = "front";
 
 let currentAudio = null;
 
+let currentAudioObjectUrl = null;
+
+let audioRequestId = 0;
+
 const deckCache = {};
 
 let searchIndex = [];
@@ -1588,26 +1592,43 @@ function getAudioPath(
 function stopCurrentAudio() {
 
     if (
-        !currentAudio
+        currentAudio
     ) {
 
-        return;
+        currentAudio.pause();
+
+        currentAudio.currentTime =
+            0;
+
+        currentAudio =
+            null;
 
     }
 
 
-    currentAudio.pause();
+    if (
+        currentAudioObjectUrl
+    ) {
 
-    currentAudio.currentTime =
-        0;
+        URL.revokeObjectURL(
+            currentAudioObjectUrl
+        );
 
-    currentAudio =
-        null;
+        currentAudioObjectUrl =
+            null;
+
+    }
 
 }
 
 
-function playCardAudio(
+// Audio()/<audio> elements are not reliably intercepted by the
+// service worker's fetch handler in every browser (a long-standing
+// gap for media elements), so a cached file can still fail to play
+// offline if we hand the element the raw URL. Going through fetch()
+// first guarantees the service worker's cache-first logic actually
+// runs, then we play the result from a local blob: URL instead.
+async function playCardAudio(
     audioPath
 ) {
 
@@ -1623,17 +1644,68 @@ function playCardAudio(
     stopCurrentAudio();
 
 
-    currentAudio =
-        new Audio(
-            audioPath
-        );
+    audioRequestId +=
+        1;
+
+    const requestId =
+        audioRequestId;
 
 
-    currentAudio
-        .play()
-        .catch(
-            () => {}
-        );
+    try {
+
+        const response =
+            await fetch(
+                audioPath
+            );
+
+        if (
+            !response.ok
+        ) {
+
+            return;
+
+        }
+
+        const blob =
+            await response.blob();
+
+        if (
+            requestId !==
+            audioRequestId
+        ) {
+
+            // A newer playCardAudio() call started while this
+            // fetch was in flight -- drop this stale result.
+            return;
+
+        }
+
+        const objectUrl =
+            URL.createObjectURL(
+                blob
+            );
+
+        currentAudioObjectUrl =
+            objectUrl;
+
+        currentAudio =
+            new Audio(
+                objectUrl
+            );
+
+        currentAudio
+            .play()
+            .catch(
+                () => {}
+            );
+
+    } catch (
+        error
+    ) {
+
+        // Offline and not cached, or a genuine network error.
+
+    }
 
 }
 
@@ -3564,7 +3636,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-v32d3271148";
+    "zwords-static-v519b2038be";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
