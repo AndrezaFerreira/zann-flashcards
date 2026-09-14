@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
+
+    <meta
+        name="theme-color"
+        content="#f7f4fb"
+    >
+
+    <meta
+        name="apple-mobile-web-app-capable"
+        content="yes"
+    >
+
+    <meta
+        name="mobile-web-app-capable"
+        content="yes"
+    >
+
+    <meta
+        name="apple-mobile-web-app-status-bar-style"
+        content="default"
+    >
+
+    <meta
+        name="apple-mobile-web-app-title"
+        content="Zann Flashcards"
+    >
+
+    <title>Zann Flashcards</title>
+
+    <link
+        rel="manifest"
+        href="manifest.json"
+    >
+
+    <link
+        rel="icon"
+        href="icons/icon-192.png"
+    >
+
+    <link
+        rel="apple-touch-icon"
+        href="icons/icon-180.png"
+    >
+
+    <link
+        rel="stylesheet"
+        href="style.css?v=20260913-1"
+    >
+</head>
+
+
+<body>
+
+    <main class="app">
+
+        <section class="home">
+
+            <div class="home-hero">
+
+                <div class="home-brand">
+
+                    <div class="home-logo">
+                        Z
+                    </div>
+
+                    <div>
+
+                        <p class="home-eyebrow">
+                            English study
+                        </p>
+
+                        <h1>
+                            Zann Flashcards
+                        </h1>
+
+                        <p class="home-subtitle">
+                            Build your vocabulary with words,
+                            phrases and irregular verbs.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <section class="offline-test">
+
+                <button
+                    id="offlineTestButton"
+                    type="button"
+                >
+                    Download Everything
+                </button>
+
+                <div
+                    id="offlineTestStatus"
+                    class="offline-test-status"
+                >
+                    Ready for offline installation
+                </div>
+
+                <div class="offline-test-progress">
+
+                    <div
+                        id="offlineTestProgressBar"
+                        class="offline-test-progress-bar"
+                    ></div>
+
+                </div>
+
+            </section>
+
+
+            <section class="collections">
+
+                <button
+                    class="collection collection-words"
+                    id="words"
+                    type="button"
+                >
+
+                    <span class="collection-icon">
+                        📚
+                    </span>
+
+
+                    <span class="collection-content">
+
+                        <span class="collection-top">
+
+                            <span class="collection-title">
+                                WORDS
+                            </span>
+
+                            <span class="collection-arrow">
+                                ›
+                            </span>
+
+                        </span>
+
+
+                        <span class="collection-count">
+                            75,667 cards
+                        </span>
+
+
+                        <span class="collection-description">
+                            Vocabulary, meanings, pronunciation
+                            and examples.
+                        </span>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="collection collection-phrases"
+                    id="phrases"
+                    type="button"
+                >
+
+                    <span class="collection-icon">
+                        💬
+                    </span>
+
+
+                    <span class="collection-content">
+
+                        <span class="collection-top">
+
+                            <span class="collection-title">
+                                PHRASES
+                            </span>
+
+                            <span class="collection-arrow">
+                                ›
+                            </span>
+
+                        </span>
+
+
+                        <span class="collection-count">
+                            16,575 cards
+                        </span>
+
+
+                        <span class="collection-description">
+                            Expressions, idioms and everyday
+                            phrases in context.
+                        </span>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="collection collection-irregulars"
+                    id="irregulars"
+                    type="button"
+                >
+
+                    <span class="collection-icon">
+                        🔄
+                    </span>
+
+
+                    <span class="collection-content">
+
+                        <span class="collection-top">
+
+                            <span class="collection-title">
+                                IRREGULAR VERBS
+                            </span>
+
+                            <span class="collection-arrow">
+                                ›
+                            </span>
+
+                        </span>
+
+
+                        <span class="collection-count">
+                            929 cards
+                        </span>
+
+
+                        <span class="collection-description">
+                            Past simple, past participle,
+                            meanings and examples.
+                        </span>
+
+                    </span>
+
+                </button>
+
+            </section>
+
+        </section>
+
+    </main>
+
+
+    <script src="libs/fflate.min.js"></script>
+
+    <script src="app.js?v=20260913-8"></script>
+
+
+    <script>
+        if ("serviceWorker" in navigator) {
+
+            window.addEventListener(
+                "load",
+                async () => {
+
+                    try {
+
+                        const registration =
+                            await navigator.serviceWorker.register(
+                                "./service-worker.js?v=20260913-3"
+                            );
+
+                        console.log(
+                            "Service Worker registered:",
+                            registration.scope
+                        );
+
+
+                        if (
+                            registration.waiting
+                        ) {
+
+                            registration.waiting.postMessage({
+                                type:
+                                    "SKIP_WAITING"
+                            });
+
+                        }
+
+
+                        registration.addEventListener(
+                            "updatefound",
+                            () => {
+
+                                const worker =
+                                    registration.installing;
+
+
+                                if (
+                                    !worker
+                                ) {
+                                    return;
+                                }
+
+
+                                worker.addEventListener(
+                                    "statechange",
+                                    () => {
+
+                                        if (
+                                            worker.state ===
+                                            "installed"
+                                            &&
+                                            navigator.serviceWorker.controller
+                                        ) {
+
+                                            console.log(
+                                                "New Service Worker installed."
+                                            );
+
+                                        }
+
+                                    }
+                                );
+
+                            }
+                        );
+
+
+                    } catch (
+                        error
+                    ) {
+
+                        console.error(
+                            "Service Worker registration failed:",
+                            error
+                        );
+
+                    }
+
+                }
+            );
+
+
+            navigator.serviceWorker.addEventListener(
+                "controllerchange",
+                () => {
+
+                    console.log(
+                        "Service Worker controller changed."
+                    );
+
+                }
+            );
+
+        }
+    </script>
+
+</body>
+
+</html>
