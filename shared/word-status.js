@@ -20,6 +20,13 @@
     const WORD_STATUS_STORE = "word_status";
     const PENDING_WORDS_STORE = "pending_words";
 
+    // Single source of truth for the R2 media host, so ZBooks builds
+    // image URLs (MEDIA_BASE_URL + card.image) the exact same way
+    // ZWords' app.js does, from one place, instead of a second hardcoded
+    // copy of this URL living in the zbooks repo.
+    const MEDIA_BASE_URL =
+        "https://pub-278133aaa2ee4e8c96dc7c89f8a6ef6e.r2.dev/";
+
     // Words ranked below this (out of ~75k in the ZWords dataset)
     // are treated as "rare" for the automatic purple indicator.
     // Configurable in one place -- not stored per word, always
@@ -222,6 +229,7 @@
         WORD_STATUS_STORE,
         PENDING_WORDS_STORE,
         RARE_RANK_THRESHOLD,
+        MEDIA_BASE_URL,
         normalizeSharedWord,
         loadAllWordStatus,
         putWordStatusRecord,
