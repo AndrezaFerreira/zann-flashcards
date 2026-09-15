@@ -2023,9 +2023,9 @@ const PENDING_EDITOR_FIELDS = [
     { key: "pronunciation", label: "Pronunciation (IPA)", placeholder: "/wɜːd/" },
     { key: "part_of_speech", label: "Part of speech", placeholder: "noun, verb, adjective..." },
     { key: "definition", label: "Definition (English)", multiline: true },
-    { key: "definition_pt", label: "Tradução (Português)", multiline: true },
+    { key: "definition_pt", label: "Translation (Portuguese)", multiline: true },
     { key: "example", label: "Example sentence (English)", multiline: true },
-    { key: "example_pt", label: "Frase de exemplo (Português)", multiline: true }
+    { key: "example_pt", label: "Example sentence (Portuguese)", multiline: true }
 ];
 
 const IRREGULAR_EDITOR_FIELDS = [
@@ -4915,7 +4915,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-v7962197586";
+    "zwords-static-vdcd277c634";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
