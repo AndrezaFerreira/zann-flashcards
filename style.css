@@ -551,6 +551,15 @@ input {
         );
 }
 
+.collection-phrasal-verbs .collection-icon {
+    background:
+        linear-gradient(
+            135deg,
+            #e3f3e6,
+            #f0faf1
+        );
+}
+
 .collection-pending .collection-icon {
     background:
         linear-gradient(

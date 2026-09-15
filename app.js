@@ -91,6 +91,11 @@ const irregularsButton =
         "irregulars"
     );
 
+const phrasalVerbsButton =
+    document.getElementById(
+        "phrasalVerbs"
+    );
+
 const pendingWordsButton =
     document.getElementById(
         "pendingWords"
@@ -125,10 +130,20 @@ const deckFiles = {
         "data/02_cards_words.json",
 
     phrases:
-        "data/03_cards_phrases.json",
+        "data/03_cards_phrases.json?v=2",
 
     irregulars:
-        "data/04_cards_irregular_verbs.json?v=3"
+        "data/04_cards_irregular_verbs.json?v=3",
+
+    phrasalVerbs:
+        "data/05_cards_phrasal_verbs.json"
+};
+
+const DECK_TITLES = {
+    words: "Words",
+    phrases: "Phrases",
+    irregulars: "Irregular Verbs",
+    phrasalVerbs: "Phrasal Verbs"
 };
 
 
@@ -485,6 +500,15 @@ irregularsButton?.addEventListener(
     () =>
         openStudyMenu(
             "irregulars"
+        )
+);
+
+
+phrasalVerbsButton?.addEventListener(
+    "click",
+    () =>
+        openStudyMenu(
+            "phrasalVerbs"
         )
 );
 
@@ -1590,13 +1614,10 @@ async function openStudyMenu(
 
 
         const deckTitle =
-            deck ===
-            "words"
-                ? "Words"
-                : deck ===
-                    "phrases"
-                    ? "Phrases"
-                    : "Irregular Verbs";
+            DECK_TITLES[
+                deck
+            ] ||
+            deck;
 
 
         app.innerHTML = `
@@ -2128,6 +2149,7 @@ function openPendingWordEditor(
                     <select name="targetDeck" id="pendingEditorDeck">
                         <option value="words" ${targetDeck === "words" ? "selected" : ""}>Words</option>
                         <option value="phrases" ${targetDeck === "phrases" ? "selected" : ""}>Phrases</option>
+                        <option value="phrasalVerbs" ${targetDeck === "phrasalVerbs" ? "selected" : ""}>Phrasal Verbs</option>
                         <option value="irregulars" ${targetDeck === "irregulars" ? "selected" : ""}>Irregular Verbs</option>
                     </select>
                 </label>
@@ -4239,7 +4261,8 @@ async function prepareSearch() {
 
         const [
             wordCards,
-            phraseCards
+            phraseCards,
+            phrasalVerbCards
         ] =
             await Promise.all(
                 [
@@ -4250,6 +4273,10 @@ async function prepareSearch() {
 
                     loadDeck(
                         "phrases"
+                    ),
+
+                    loadDeck(
+                        "phrasalVerbs"
                     )
 
                 ]
@@ -4278,6 +4305,18 @@ async function prepareSearch() {
                     createSearchItem(
                         card,
                         "phrases",
+                        index
+                    )
+            ),
+
+            ...phrasalVerbCards.map(
+                (
+                    card,
+                    index
+                ) =>
+                    createSearchItem(
+                        card,
+                        "phrasalVerbs",
                         index
                     )
             )
@@ -4915,7 +4954,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-vdcd277c634";
+    "zwords-static-v8e4dff4dd3";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
@@ -4943,6 +4982,7 @@ const OFFLINE_CORE_FILES = [
     "./data/02_cards_words.json",
     "./data/03_cards_phrases.json",
     "./data/04_cards_irregular_verbs.json",
+    "./data/05_cards_phrasal_verbs.json",
 
     "./data/audio_map.json",
     "./data/irregular_forms_audio_map.json",
