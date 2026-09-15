@@ -46,6 +46,116 @@
 
     }
 
+    // audio_map.json values look like "audio_all/1.mp3" (the "audio_all/"
+    // prefix is stripped, matching app.js's getAudioPath);
+    // irregular_forms_audio_map.json values already look like
+    // "irregular_forms/abided.mp3" (no "audio_all/" to strip, so the
+    // replace below is a harmless no-op) -- one helper covers both, the
+    // same way app.js's several *AudioPath functions already do it.
+    function buildAudioUrl(audioFile) {
+
+        if (!audioFile) {
+            return null;
+        }
+
+        return (
+            MEDIA_BASE_URL +
+            "audio/" +
+            audioFile.replace("audio_all/", "")
+        );
+
+    }
+
+
+    // ============================================================
+    // PER-SENSE PROGRESS (localStorage, not IndexedDB)
+    //
+    // ZWords itself tracks New/Learning/Known per sense_id, not per
+    // word, in localStorage under PROGRESS_STORAGE_KEY (app.js's own
+    // studyProgress/getCardProgressKey/loadStudyProgress/
+    // saveStudyProgress, kept exactly as they already are there --
+    // this is a second, independent implementation of the same simple
+    // key format, so ZBooks can read/write the *exact* card ZWords
+    // itself would, not a word-level approximation of it).
+    //
+    // localStorage is origin-scoped, same as the IndexedDB store above,
+    // so this reaches the same data ZWords reads -- ZWords just won't
+    // notice the change until its own page is reloaded (studyProgress
+    // is only read from localStorage once, at ZWords startup).
+    // ============================================================
+
+    const PROGRESS_STORAGE_KEY = "zwords_progress_v1";
+
+    function getSenseProgressKey(deck, senseId) {
+        return `${deck}::${senseId}`;
+    }
+
+    function loadSenseProgress() {
+
+        try {
+
+            const saved = localStorage.getItem(PROGRESS_STORAGE_KEY);
+
+            if (!saved) {
+                return {};
+            }
+
+            const parsed = JSON.parse(saved);
+
+            return (parsed && typeof parsed === "object") ? parsed : {};
+
+        } catch (error) {
+
+            console.error("Could not load sense progress:", error);
+            return {};
+
+        }
+
+    }
+
+    function saveSenseProgress(progress) {
+
+        try {
+
+            localStorage.setItem(
+                PROGRESS_STORAGE_KEY,
+                JSON.stringify(progress)
+            );
+
+        } catch (error) {
+
+            console.error("Could not save sense progress:", error);
+
+        }
+
+    }
+
+    function getSenseStatus(deck, senseId) {
+
+        const progress = loadSenseProgress();
+        const status = progress[getSenseProgressKey(deck, senseId)];
+
+        return (status === "learning" || status === "known")
+            ? status
+            : "new";
+
+    }
+
+    function setSenseStatus(deck, senseId, status) {
+
+        const progress = loadSenseProgress();
+        const key = getSenseProgressKey(deck, senseId);
+
+        if (status === "new") {
+            delete progress[key];
+        } else {
+            progress[key] = status;
+        }
+
+        saveSenseProgress(progress);
+
+    }
+
     // Words ranked below this (out of ~75k in the ZWords dataset)
     // are treated as "rare" for the automatic purple indicator.
     // Configurable in one place -- not stored per word, always
@@ -250,6 +360,10 @@
         RARE_RANK_THRESHOLD,
         MEDIA_BASE_URL,
         buildImageUrl,
+        buildAudioUrl,
+        getSenseProgressKey,
+        getSenseStatus,
+        setSenseStatus,
         normalizeSharedWord,
         loadAllWordStatus,
         putWordStatusRecord,
