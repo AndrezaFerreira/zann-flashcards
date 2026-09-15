@@ -91,6 +91,16 @@ const irregularsButton =
         "irregulars"
     );
 
+const pendingWordsButton =
+    document.getElementById(
+        "pendingWords"
+    );
+
+const pendingWordsCountLabel =
+    document.getElementById(
+        "pendingWordsCount"
+    );
+
 
 // ============================================================
 // MEDIA HOST (Cloudflare R2)
@@ -477,6 +487,48 @@ irregularsButton?.addEventListener(
             "irregulars"
         )
 );
+
+
+pendingWordsButton?.addEventListener(
+    "click",
+    openPendingWordsView
+);
+
+
+(async function initPendingWordsCount() {
+
+    if (
+        !pendingWordsCountLabel
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        const pendingWords =
+            await ZWordsSharedStatus.loadAllPendingWords();
+
+        pendingWordsCountLabel.textContent =
+            `${pendingWords.length.toLocaleString("en-US")} words`;
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "Could not load pending words count:",
+            error
+        );
+
+        pendingWordsCountLabel.textContent =
+            "0 words";
+
+    }
+
+})();
 
 
 // ============================================================
@@ -1719,6 +1771,189 @@ async function openStudyMenu(
 
         app.innerHTML =
             "<p>Error loading collection.</p>";
+
+    }
+
+}
+
+
+// ============================================================
+// PENDING WORDS (found in ZBooks, not yet a real ZWords card)
+// ============================================================
+
+async function openPendingWordsView() {
+
+    try {
+
+        stopCurrentAudio();
+
+        hideSearch();
+
+
+        app.innerHTML =
+            "<p>Loading...</p>";
+
+
+        const pendingWords =
+            await ZWordsSharedStatus.loadAllPendingWords();
+
+
+        pendingWords.sort(
+            (a, b) =>
+                (b.addedAt || "").localeCompare(
+                    a.addedAt || ""
+                )
+        );
+
+
+        const listHtml =
+            pendingWords.length
+                ? pendingWords
+                    .map(
+                        entry => `
+                            <li class="pending-word-item" data-word="${escapeHtml(entry.word)}">
+
+                                <div class="pending-word-info">
+
+                                    <span class="pending-word-text">
+                                        ${escapeHtml(entry.displayWord || entry.word)}
+                                    </span>
+
+                                    <span class="pending-word-meta">
+                                        ${escapeHtml(entry.source || "")}
+                                        ${
+                                            entry.addedAt
+                                                ? `&middot; ${escapeHtml(new Date(entry.addedAt).toLocaleDateString())}`
+                                                : ""
+                                        }
+                                    </span>
+
+                                </div>
+
+                                <button
+                                    class="pending-word-remove"
+                                    type="button"
+                                    data-word="${escapeHtml(entry.word)}"
+                                >
+                                    Remove
+                                </button>
+
+                            </li>
+                        `
+                    )
+                    .join("")
+                : `<p class="pending-words-empty">No new words yet. Words you mark "Add to ZWords" while reading in ZBooks show up here.</p>`;
+
+
+        app.innerHTML = `
+
+            <div class="card-header">
+
+                <button
+                    id="pendingWordsBackButton"
+                    type="button"
+                >
+                    ← Back
+                </button>
+
+            </div>
+
+
+            <section class="study-menu">
+
+                <div class="study-menu-header">
+
+                    <h1>
+                        New Words
+                    </h1>
+
+                    <p>
+                        Found while reading in ZBooks -- run the
+                        pipeline to turn these into real cards
+                        (image, definition, example), then remove
+                        them from this list.
+                    </p>
+
+                </div>
+
+
+                <ul class="pending-word-list">
+                    ${listHtml}
+                </ul>
+
+            </section>
+        `;
+
+
+        document
+            .getElementById(
+                "pendingWordsBackButton"
+            )
+            ?.addEventListener(
+                "click",
+                goHome
+            );
+
+
+        document
+            .querySelectorAll(
+                ".pending-word-remove"
+            )
+            .forEach(
+                button => {
+
+                    button.addEventListener(
+                        "click",
+                        async () => {
+
+                            const word =
+                                button.dataset.word;
+
+                            button.disabled =
+                                true;
+
+                            try {
+
+                                await ZWordsSharedStatus.deletePendingWord(
+                                    word
+                                );
+
+                                button
+                                    .closest(".pending-word-item")
+                                    ?.remove();
+
+                            } catch (
+                                error
+                            ) {
+
+                                console.error(
+                                    "Could not remove pending word:",
+                                    error
+                                );
+
+                                button.disabled =
+                                    false;
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            error
+        );
+
+
+        app.innerHTML =
+            "<p>Error loading new words.</p>";
 
     }
 
@@ -4220,7 +4455,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-v9113a8db2f";
+    "zwords-static-v9ad6a74014";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";

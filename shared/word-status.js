@@ -311,6 +311,30 @@
     }
 
 
+    // Used once a pending word has been turned into a real card by the
+    // pipeline (or if it was added by mistake) to clear it from the
+    // review list -- ZWords' own "New Words" section is where this gets
+    // called from.
+    async function deletePendingWord(word) {
+        const db = await openSharedDb();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(PENDING_WORDS_STORE, "readwrite");
+            tx.objectStore(PENDING_WORDS_STORE).delete(word);
+
+            tx.oncomplete = () => {
+                db.close();
+                resolve();
+            };
+
+            tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+            };
+        });
+    }
+
+
     // ============================================================
     // DISPLAY COLOR
     //
@@ -369,6 +393,7 @@
         putWordStatusRecord,
         putPendingWord,
         loadAllPendingWords,
+        deletePendingWord,
         getDisplayColor
     };
 
