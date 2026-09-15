@@ -2046,7 +2046,13 @@ const PENDING_EDITOR_FIELDS = [
     { key: "definition", label: "Definition (English)", multiline: true },
     { key: "definition_pt", label: "Translation (Portuguese)", multiline: true },
     { key: "example", label: "Example sentence (English)", multiline: true },
-    { key: "example_pt", label: "Example sentence (Portuguese)", multiline: true }
+    { key: "example_pt", label: "Example sentence (Portuguese)", multiline: true },
+    {
+        key: "imageSourceUrl",
+        label: "Image URL",
+        placeholder: "https://... (link to an image)",
+        isImageUrl: true
+    }
 ];
 
 const IRREGULAR_EDITOR_FIELDS = [
@@ -2094,7 +2100,20 @@ function openPendingWordEditor(
                                     name="${field.key}"
                                     placeholder="${escapeHtml(field.placeholder || "")}"
                                     value="${escapeHtml(values[field.key] || "")}"
+                                    ${field.isImageUrl ? `class="card-editor-image-url-input"` : ""}
                                 >`
+                        }
+                        ${
+                            field.isImageUrl
+                                ? `<img
+                                    class="card-editor-image-preview"
+                                    alt="Image preview"
+                                    src="${escapeHtml(values[field.key] || "")}"
+                                    onerror="this.hidden=true"
+                                    onload="this.hidden=false"
+                                    ${values[field.key] ? "" : "hidden"}
+                                >`
+                                : ""
                         }
                     </label>
                 `
@@ -2195,6 +2214,31 @@ function openPendingWordEditor(
     const form =
         document.getElementById(
             "pendingEditorForm"
+        );
+
+    form
+        .querySelector(".card-editor-image-url-input")
+        ?.addEventListener(
+            "input",
+            event => {
+
+                const preview =
+                    form.querySelector(".card-editor-image-preview");
+
+                if (!preview) {
+                    return;
+                }
+
+                const url = event.target.value.trim();
+
+                if (url) {
+                    preview.src = url;
+                    preview.hidden = false;
+                } else {
+                    preview.hidden = true;
+                }
+
+            }
         );
 
     document
@@ -4954,7 +4998,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-ve3f1738fac";
+    "zwords-static-vfa7549a23b";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
