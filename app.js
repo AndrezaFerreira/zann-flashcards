@@ -773,44 +773,88 @@ function getCardProgressKey(
 }
 
 
-// getCardStatus/setCardStatus are now backed by the SHARED per-word
-// status store (zwords_shared_db, see shared/word-status.js) instead of
-// the old per-sense_id studyProgress/localStorage. This is what lets a
-// word marked in ZBooks show up with the same status in ZWords and vice
-// versa. getCardProgressKey/studyProgress/loadStudyProgress/
-// saveStudyProgress are kept below untouched -- they are only read once,
-// by migrateOldProgressToSharedStatus(), to carry old progress forward.
+// getCardStatus/setCardStatus are per-SENSE again (studyProgress,
+// sense_id-keyed), exactly like before the shared store existed --
+// marking one definition of a word must not repaint every other
+// definition of that word (a real bug: ZBooks only ever shows a word's
+// first/primary definition, since an EPUB gives no sense to disambiguate,
+// and briefly this file made ALL senses follow that single word-level
+// status). The shared per-word store (zwords_shared_db) is still kept in
+// sync as a side effect (updateSharedWordAggregate below) so ZBooks
+// sees an accurate word-level signal, and a card with NO sense-level
+// mark of its own falls back to that shared status ONLY if it is the
+// word's primary definition (definition_number 1) -- the one card that
+// corresponds to what ZBooks actually displayed and let the user mark.
 
 function getCardStatus(
     deck,
     card
 ) {
 
-    const key =
-        ZWordsSharedStatus.normalizeSharedWord(
-            card.word ||
-            ""
+    const progressKey =
+        getCardProgressKey(
+            deck,
+            card
         );
 
-    const record =
-        sharedWordStatusMap[
-            key
+    const senseStatus =
+        studyProgress[
+            progressKey
         ];
-
-    const status =
-        record &&
-        record.explicitStatus;
 
 
     if (
-        status ===
+        senseStatus ===
         "learning"
         ||
-        status ===
+        senseStatus ===
         "known"
     ) {
 
-        return status;
+        return senseStatus;
+
+    }
+
+
+    const isPrimaryDefinition =
+        card.definition_number ===
+        1
+        ||
+        card.definition_number ===
+        undefined;
+
+
+    if (
+        isPrimaryDefinition
+    ) {
+
+        const key =
+            ZWordsSharedStatus.normalizeSharedWord(
+                card.word ||
+                ""
+            );
+
+        const record =
+            sharedWordStatusMap[
+                key
+            ];
+
+        const sharedStatus =
+            record &&
+            record.explicitStatus;
+
+
+        if (
+            sharedStatus ===
+            "learning"
+            ||
+            sharedStatus ===
+            "known"
+        ) {
+
+            return sharedStatus;
+
+        }
 
     }
 
@@ -842,9 +886,54 @@ function setCardStatus(
     }
 
 
+    const progressKey =
+        getCardProgressKey(
+            deck,
+            card
+        );
+
+
+    if (
+        status ===
+        "new"
+    ) {
+
+        delete studyProgress[
+            progressKey
+        ];
+
+    } else {
+
+        studyProgress[
+            progressKey
+        ] =
+            status;
+
+    }
+
+
+    saveStudyProgress();
+
+    updateSharedWordAggregate(
+        card.word
+    );
+
+}
+
+
+// Recomputes the shared per-word status for `word` from every sense of
+// it currently loaded in any deck (known beats learning beats no mark),
+// and writes that to zwords_shared_db. Only decks already loaded into
+// deckCache this session are considered -- good enough for a best-
+// effort cross-app signal; studyProgress itself (read above) remains
+// the exact, complete source of truth for ZWords' own per-card display.
+function updateSharedWordAggregate(
+    word
+) {
+
     const key =
         ZWordsSharedStatus.normalizeSharedWord(
-            card.word ||
+            word ||
             ""
         );
 
@@ -853,6 +942,89 @@ function setCardStatus(
     ) {
 
         return;
+
+    }
+
+
+    let aggregate = null;
+
+
+    for (
+        const otherDeck of Object.keys(
+            deckCache
+        )
+    ) {
+
+        const otherDeckCards =
+            deckCache[
+                otherDeck
+            ] ||
+            [];
+
+
+        for (
+            const otherCard of otherDeckCards
+        ) {
+
+            if (
+                ZWordsSharedStatus.normalizeSharedWord(
+                    otherCard.word ||
+                    ""
+                ) !==
+                key
+            ) {
+
+                continue;
+
+            }
+
+
+            const otherStatus =
+                studyProgress[
+                    getCardProgressKey(
+                        otherDeck,
+                        otherCard
+                    )
+                ];
+
+
+            if (
+                otherStatus ===
+                "known"
+            ) {
+
+                aggregate =
+                    "known";
+
+                break;
+
+            }
+
+
+            if (
+                otherStatus ===
+                "learning"
+                &&
+                aggregate !==
+                "known"
+            ) {
+
+                aggregate =
+                    "learning";
+
+            }
+
+        }
+
+
+        if (
+            aggregate ===
+            "known"
+        ) {
+
+            break;
+
+        }
 
     }
 
@@ -867,16 +1039,15 @@ function setCardStatus(
 
 
     if (
-        status ===
-        "new"
+        aggregate
     ) {
 
-        delete record.explicitStatus;
+        record.explicitStatus =
+            aggregate;
 
     } else {
 
-        record.explicitStatus =
-            status;
+        delete record.explicitStatus;
 
     }
 
@@ -2366,14 +2537,9 @@ function showCard({
 
 
     const imagePath =
-        card.image
-            ? `${MEDIA_BASE_URL}${
-                card.image.replace(
-                    "images_all/",
-                    "images/"
-                )
-            }`
-            : null;
+        ZWordsSharedStatus.buildImageUrl(
+            card.image
+        );
 
 
     const audioPath =
@@ -4054,7 +4220,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-v81790dede5";
+    "zwords-static-va8591a2c6e";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";

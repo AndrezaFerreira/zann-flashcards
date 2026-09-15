@@ -21,11 +21,30 @@
     const PENDING_WORDS_STORE = "pending_words";
 
     // Single source of truth for the R2 media host, so ZBooks builds
-    // image URLs (MEDIA_BASE_URL + card.image) the exact same way
-    // ZWords' app.js does, from one place, instead of a second hardcoded
-    // copy of this URL living in the zbooks repo.
+    // image URLs the exact same way ZWords' app.js does, from one place,
+    // instead of a second hardcoded copy living in the zbooks repo (a
+    // second copy is exactly how this went wrong once already -- see
+    // buildImageUrl below).
     const MEDIA_BASE_URL =
         "https://pub-278133aaa2ee4e8c96dc7c89f8a6ef6e.r2.dev/";
+
+    // Card "image" fields carry the local pipeline path
+    // ("images_all/<uuid>.webp"), but the R2 bucket stores images under
+    // "images/" -- app.js has always done this replace before building
+    // the URL. Centralized here after ZBooks briefly skipped it and
+    // linked straight to images_all/, which 404s on R2.
+    function buildImageUrl(imagePath) {
+
+        if (!imagePath) {
+            return null;
+        }
+
+        return (
+            MEDIA_BASE_URL +
+            imagePath.replace("images_all/", "images/")
+        );
+
+    }
 
     // Words ranked below this (out of ~75k in the ZWords dataset)
     // are treated as "rare" for the automatic purple indicator.
@@ -230,6 +249,7 @@
         PENDING_WORDS_STORE,
         RARE_RANK_THRESHOLD,
         MEDIA_BASE_URL,
+        buildImageUrl,
         normalizeSharedWord,
         loadAllWordStatus,
         putWordStatusRecord,
