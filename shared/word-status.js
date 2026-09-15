@@ -20,6 +20,34 @@
     const WORD_STATUS_STORE = "word_status";
     const PENDING_WORDS_STORE = "pending_words";
 
+    // IndexedDB has no native cross-tab change event, unlike
+    // localStorage's own "storage" event (which fires in every OTHER
+    // same-origin tab, never the one that made the change) -- writing a
+    // small ping here after every word_status write lets ZWords and
+    // ZBooks notice each other's changes live, when both happen to be
+    // open at once, without polling. The ping's value only carries
+    // which word changed + a timestamp; listeners re-read the real
+    // record from IndexedDB rather than trusting the ping's payload.
+    const WORD_STATUS_UPDATED_KEY = "zwords_word_status_updated";
+
+    function pingWordStatusUpdated(word) {
+
+        try {
+
+            localStorage.setItem(
+                WORD_STATUS_UPDATED_KEY,
+                JSON.stringify({ word, at: Date.now() })
+            );
+
+        } catch (error) {
+
+            // Best-effort only -- a blocked/full localStorage should
+            // not fail the write that already succeeded in IndexedDB.
+
+        }
+
+    }
+
     // Single source of truth for the R2 media host, so ZBooks builds
     // image URLs the exact same way ZWords' app.js does, from one place,
     // instead of a second hardcoded copy living in the zbooks repo (a
@@ -255,6 +283,7 @@
 
             tx.oncomplete = () => {
                 db.close();
+                pingWordStatusUpdated(record.word);
                 resolve();
             };
 
@@ -383,6 +412,7 @@
         PENDING_WORDS_STORE,
         RARE_RANK_THRESHOLD,
         MEDIA_BASE_URL,
+        WORD_STATUS_UPDATED_KEY,
         buildImageUrl,
         buildAudioUrl,
         getSenseProgressKey,
