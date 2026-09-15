@@ -1813,10 +1813,19 @@ async function openPendingWordsView() {
                         entry => `
                             <li class="pending-word-item" data-word="${escapeHtml(entry.word)}">
 
-                                <div class="pending-word-info">
+                                <button
+                                    class="pending-word-info"
+                                    type="button"
+                                    data-word="${escapeHtml(entry.word)}"
+                                >
 
                                     <span class="pending-word-text">
                                         ${escapeHtml(entry.displayWord || entry.word)}
+                                        ${
+                                            entry.draft
+                                                ? `<span class="pending-word-draft-badge">Draft</span>`
+                                                : ""
+                                        }
                                     </span>
 
                                     <span class="pending-word-meta">
@@ -1828,7 +1837,7 @@ async function openPendingWordsView() {
                                         }
                                     </span>
 
-                                </div>
+                                </button>
 
                                 <button
                                     class="pending-word-remove"
@@ -1868,10 +1877,10 @@ async function openPendingWordsView() {
                     </h1>
 
                     <p>
-                        Found while reading in ZBooks -- run the
-                        pipeline to turn these into real cards
-                        (image, definition, example), then remove
-                        them from this list.
+                        Found while reading in ZBooks. Tap a word to
+                        fill in its card (definition, translation,
+                        example) and export it for the pipeline --
+                        or just Remove it once it's been handled.
                     </p>
 
                 </div>
@@ -1943,6 +1952,41 @@ async function openPendingWordsView() {
             );
 
 
+        document
+            .querySelectorAll(
+                ".pending-word-info"
+            )
+            .forEach(
+                button => {
+
+                    button.addEventListener(
+                        "click",
+                        () => {
+
+                            const entry =
+                                pendingWords.find(
+                                    item =>
+                                        item.word ===
+                                        button.dataset.word
+                                );
+
+                            if (
+                                entry
+                            ) {
+
+                                openPendingWordEditor(
+                                    entry
+                                );
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+
     } catch (
         error
     ) {
@@ -1956,6 +2000,422 @@ async function openPendingWordsView() {
             "<p>Error loading new words.</p>";
 
     }
+
+}
+
+
+// ============================================================
+// PENDING WORD EDITOR
+//
+// Fills in the fields a real card needs (word/pronunciation/part of
+// speech/definition/translation/example, plus base/past forms for
+// irregular verbs) and picks which deck it belongs in. ZWords is a
+// static site with no backend, so this can't publish the card to
+// every user by itself -- "Save Draft" keeps the filled-in fields
+// locally (in the same pending_words record, so it survives a reload
+// and syncs to ZBooks too), and "Export Card JSON" downloads a file in
+// the exact shape 11_merge_new_card.py expects, which merges it into
+// the right data/*.json file for the next pipeline run + redeploy,
+// which is what actually ships it to every user.
+// ============================================================
+
+const PENDING_EDITOR_FIELDS = [
+    { key: "pronunciation", label: "Pronunciation (IPA)", placeholder: "/wɜːd/" },
+    { key: "part_of_speech", label: "Part of speech", placeholder: "noun, verb, adjective..." },
+    { key: "definition", label: "Definition (English)", multiline: true },
+    { key: "definition_pt", label: "Tradução (Português)", multiline: true },
+    { key: "example", label: "Example sentence (English)", multiline: true },
+    { key: "example_pt", label: "Frase de exemplo (Português)", multiline: true }
+];
+
+const IRREGULAR_EDITOR_FIELDS = [
+    { key: "base_form", label: "Base form", placeholder: "go" },
+    { key: "past_simple", label: "Past simple (comma-separated)", placeholder: "went" },
+    { key: "past_participle", label: "Past participle (comma-separated)", placeholder: "gone" }
+];
+
+function openPendingWordEditor(
+    entry
+) {
+
+    stopCurrentAudio();
+    hideSearch();
+
+    const draft =
+        entry.draft ||
+        {};
+
+    const targetDeck =
+        draft.targetDeck ||
+        "words";
+
+
+    const fieldsHtml = (
+        fields,
+        values
+    ) =>
+        fields
+            .map(
+                field => `
+                    <label class="card-editor-field">
+                        <span class="card-editor-label">
+                            ${escapeHtml(field.label)}
+                        </span>
+                        ${
+                            field.multiline
+                                ? `<textarea
+                                    name="${field.key}"
+                                    rows="2"
+                                    placeholder="${escapeHtml(field.placeholder || "")}"
+                                >${escapeHtml(values[field.key] || "")}</textarea>`
+                                : `<input
+                                    type="text"
+                                    name="${field.key}"
+                                    placeholder="${escapeHtml(field.placeholder || "")}"
+                                    value="${escapeHtml(values[field.key] || "")}"
+                                >`
+                        }
+                    </label>
+                `
+            )
+            .join("");
+
+
+    app.innerHTML = `
+
+        <div class="card-header">
+
+            <button id="pendingEditorBackButton" type="button">
+                ← Back
+            </button>
+
+        </div>
+
+
+        <section class="study-menu">
+
+            <div class="study-menu-header">
+
+                <h1>
+                    ${escapeHtml(entry.displayWord || entry.word)}
+                </h1>
+
+                <p>
+                    Fill in what you can, save a draft any time, and
+                    export the finished card when it's ready.
+                </p>
+
+            </div>
+
+
+            <form id="pendingEditorForm" class="card-editor-form">
+
+                <label class="card-editor-field">
+                    <span class="card-editor-label">
+                        Word
+                    </span>
+                    <input
+                        type="text"
+                        name="word"
+                        value="${escapeHtml(draft.word || entry.displayWord || entry.word)}"
+                    >
+                </label>
+
+                <label class="card-editor-field">
+                    <span class="card-editor-label">
+                        Deck
+                    </span>
+                    <select name="targetDeck" id="pendingEditorDeck">
+                        <option value="words" ${targetDeck === "words" ? "selected" : ""}>Words</option>
+                        <option value="phrases" ${targetDeck === "phrases" ? "selected" : ""}>Phrases</option>
+                        <option value="irregulars" ${targetDeck === "irregulars" ? "selected" : ""}>Irregular Verbs</option>
+                    </select>
+                </label>
+
+                ${fieldsHtml(PENDING_EDITOR_FIELDS, draft)}
+
+                <div id="pendingEditorIrregularFields">
+                    ${
+                        targetDeck === "irregulars"
+                            ? fieldsHtml(IRREGULAR_EDITOR_FIELDS, draft)
+                            : ""
+                    }
+                </div>
+
+                <div class="card-editor-actions">
+
+                    <button type="button" id="pendingEditorSaveButton" class="card-editor-button">
+                        Save Draft
+                    </button>
+
+                    <button type="submit" class="card-editor-button card-editor-button-primary">
+                        Export Card JSON
+                    </button>
+
+                </div>
+
+                <p id="pendingEditorNote" class="pending-editor-note"></p>
+
+            </form>
+
+        </section>
+    `;
+
+
+    document
+        .getElementById("pendingEditorBackButton")
+        ?.addEventListener(
+            "click",
+            openPendingWordsView
+        );
+
+
+    const form =
+        document.getElementById(
+            "pendingEditorForm"
+        );
+
+    document
+        .getElementById("pendingEditorDeck")
+        ?.addEventListener(
+            "change",
+            event => {
+
+                const irregularArea =
+                    document.getElementById(
+                        "pendingEditorIrregularFields"
+                    );
+
+                irregularArea.innerHTML =
+                    event.target.value ===
+                    "irregulars"
+                        ? fieldsHtml(
+                            IRREGULAR_EDITOR_FIELDS,
+                            readFormDraft(
+                                form
+                            )
+                        )
+                        : "";
+
+            }
+        );
+
+
+    document
+        .getElementById("pendingEditorSaveButton")
+        ?.addEventListener(
+            "click",
+            async () => {
+
+                const note =
+                    document.getElementById(
+                        "pendingEditorNote"
+                    );
+
+                try {
+
+                    await ZWordsSharedStatus.putPendingWord({
+                        ...entry,
+                        draft:
+                            readFormDraft(
+                                form
+                            )
+                    });
+
+                    if (
+                        note
+                    ) {
+
+                        note.textContent =
+                            "Draft saved.";
+
+                    }
+
+                } catch (
+                    error
+                ) {
+
+                    console.error(
+                        "Could not save draft:",
+                        error
+                    );
+
+                    if (
+                        note
+                    ) {
+
+                        note.textContent =
+                            "Could not save draft.";
+
+                    }
+
+                }
+
+            }
+        );
+
+
+    form?.addEventListener(
+        "submit",
+        async event => {
+
+            event.preventDefault();
+
+            const draftFields =
+                readFormDraft(
+                    form
+                );
+
+            await ZWordsSharedStatus.putPendingWord({
+                ...entry,
+                draft:
+                    draftFields
+            });
+
+            exportCardJson(
+                draftFields
+            );
+
+        }
+    );
+
+}
+
+
+function readFormDraft(
+    form
+) {
+
+    const formData =
+        new FormData(
+            form
+        );
+
+    const draft = {
+        targetDeck:
+            formData.get(
+                "targetDeck"
+            ) ||
+            "words",
+
+        word:
+            (
+                formData.get(
+                    "word"
+                ) ||
+                ""
+            ).trim()
+    };
+
+
+    for (
+        const field of PENDING_EDITOR_FIELDS
+    ) {
+
+        draft[
+            field.key
+        ] =
+            (
+                formData.get(
+                    field.key
+                ) ||
+                ""
+            ).trim();
+
+    }
+
+
+    if (
+        draft.targetDeck ===
+        "irregulars"
+    ) {
+
+        for (
+            const field of IRREGULAR_EDITOR_FIELDS
+        ) {
+
+            const raw =
+                (
+                    formData.get(
+                        field.key
+                    ) ||
+                    ""
+                ).trim();
+
+            draft[
+                field.key
+            ] =
+                field.key ===
+                "base_form"
+                    ? raw
+                    : raw
+                        .split(
+                            ","
+                        )
+                        .map(
+                            item =>
+                                item.trim()
+                        )
+                        .filter(
+                            Boolean
+                        );
+
+        }
+
+    }
+
+
+    return draft;
+
+}
+
+
+function exportCardJson(
+    draft
+) {
+
+    const blob =
+        new Blob(
+            [
+                JSON.stringify(
+                    draft,
+                    null,
+                    2
+                )
+            ],
+            {
+                type:
+                    "application/json"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+    const link =
+        document.createElement(
+            "a"
+        );
+
+    link.href =
+        url;
+
+    link.download =
+        `${draft.word || "new-word"}.json`;
+
+    document.body.appendChild(
+        link
+    );
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(
+        url
+    );
 
 }
 
@@ -4455,7 +4915,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-v9ad6a74014";
+    "zwords-static-v7962197586";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
