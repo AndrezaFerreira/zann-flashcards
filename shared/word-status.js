@@ -300,43 +300,48 @@
     // in the ZWords dataset at all.
     // ============================================================
 
+    // Pending words are the one piece of data that genuinely needs to
+    // be the same for every reader, not just every tab on one person's
+    // device -- a word someone marks "Add to ZWords" on their own phone
+    // needs to show up in the curator's own "New Words" list, which a
+    // per-browser IndexedDB store can never do. Backed by a small
+    // Cloudflare Worker + KV (zwords-api) instead of the local
+    // PENDING_WORDS_STORE that used to hold these; same function
+    // signatures as before, so nothing calling these needs to change.
+    // Study progress (Learning/Known) is NOT part of this -- that
+    // stays per-person, in each browser's own IndexedDB, on purpose.
+    const PENDING_WORDS_API_URL =
+        "https://zwords-api.zwords-api.workers.dev/pending-words";
+
     async function putPendingWord(record) {
-        const db = await openSharedDb();
 
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(PENDING_WORDS_STORE, "readwrite");
-            tx.objectStore(PENDING_WORDS_STORE).put(record);
-
-            tx.oncomplete = () => {
-                db.close();
-                resolve();
-            };
-
-            tx.onerror = () => {
-                db.close();
-                reject(tx.error);
-            };
+        const response = await fetch(PENDING_WORDS_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(record)
         });
+
+        if (!response.ok) {
+            throw new Error(
+                `Could not save pending word (${response.status})`
+            );
+        }
+
     }
 
 
     async function loadAllPendingWords() {
-        const db = await openSharedDb();
 
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(PENDING_WORDS_STORE, "readonly");
-            const request = tx.objectStore(PENDING_WORDS_STORE).getAll();
+        const response = await fetch(PENDING_WORDS_API_URL);
 
-            request.onsuccess = () => {
-                db.close();
-                resolve(request.result || []);
-            };
+        if (!response.ok) {
+            throw new Error(
+                `Could not load pending words (${response.status})`
+            );
+        }
 
-            request.onerror = () => {
-                db.close();
-                reject(request.error);
-            };
-        });
+        return response.json();
+
     }
 
 
@@ -345,22 +350,18 @@
     // review list -- ZWords' own "New Words" section is where this gets
     // called from.
     async function deletePendingWord(word) {
-        const db = await openSharedDb();
 
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(PENDING_WORDS_STORE, "readwrite");
-            tx.objectStore(PENDING_WORDS_STORE).delete(word);
+        const response = await fetch(
+            `${PENDING_WORDS_API_URL}/${encodeURIComponent(word)}`,
+            { method: "DELETE" }
+        );
 
-            tx.oncomplete = () => {
-                db.close();
-                resolve();
-            };
+        if (!response.ok) {
+            throw new Error(
+                `Could not remove pending word (${response.status})`
+            );
+        }
 
-            tx.onerror = () => {
-                db.close();
-                reject(tx.error);
-            };
-        });
     }
 
 

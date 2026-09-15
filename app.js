@@ -4998,7 +4998,7 @@ const OFFLINE_MEDIA_CACHE =
     "zwords-media-v1";
 
 const OFFLINE_STATIC_CACHE =
-    "zwords-static-vfa7549a23b";
+    "zwords-static-vb8139e8b5a";
 
 const OFFLINE_PROGRESS_KEY =
     "zwords_offline_packages_v1";
